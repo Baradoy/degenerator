@@ -14,7 +14,11 @@ defmodule Mix.Tasks.<%= project %>.Gen.<%= name_inflection.scoped %> do
   """
 
   @shortdoc "Generate a <%= name_inflection.singular %>"
-  @template_path "<%= template_path %>"
+  @templates_path "<%= templates_path %>/"
+
+  @templates [
+    %{path: "<%= template_path %>", default_module_name: "<%= module_inflection.scoped %>"}
+  ]
 
  use Mix.Task
 
@@ -28,16 +32,20 @@ defmodule Mix.Tasks.<%= project %>.Gen.<%= name_inflection.scoped %> do
 
   def generate(opts) do
     project = Keyword.get(opts, :project)
-    project_path = project |> Macro.underscore() |> String.downcase()
-    module_name = Keyword.get(opts, :module_name)
 
-    module_inflection = opts |> Keyword.get(:module_name) |> Mix.Phoenix.inflect() |> Map.new()
-    module_path = Path.join(["lib", project_path, module_inflection.path])
+    for template <- @templates do
+      destinatin_path = destinatin_path(template[:path], project) |> dbg
 
-    files = [{:eex, module_inflection.path <> ".ex", module_path <> ".ex"}]
-    binding = [inflection: module_inflection, project: project, module_name: module_name]
+      module_name = Keyword.get(opts, :module_name, template[:default_module_name]) |> dbg
+      module_inflection = module_name |> Mix.Phoenix.inflect() |> Map.new() |> dbg
 
-    Mix.Phoenix.copy_from(generator_paths(), @template_path, binding, files)
+      files = [{:eex, template[:path], destinatin_path}]
+      binding = [
+        inflection: module_inflection, project: project, module_name: module_name
+      ]
+
+      Mix.Phoenix.copy_from(generator_paths(), @templates_path, binding, files)
+    end
 
     print_shell_instructions()
  end
@@ -65,4 +73,9 @@ defmodule Mix.Tasks.<%= project %>.Gen.<%= name_inflection.scoped %> do
  end
 
  defp generator_paths, do: [".", :<%= app %>, :degenerator]
+
+ defp destinatin_path(path, project) do
+   project = project |> Macro.underscore() |> String.downcase()
+   String.replace(path, "my_project", project)
+ end
 end

@@ -6,19 +6,22 @@ defmodule Mix.Tasks.Degenerator do
 
   use Mix.Task
 
+  @requirements ["app.config"]
+
   @defaults [
-    name: "generator"
+    generator: "generator"
   ]
 
   def run(args) do
-    case OptionParser.parse(args, switches: [name: :string, path: :string]) do
+    case OptionParser.parse(args, switches: [name: :string, path: :string, project_root: :string]) do
       {opts, [], []} -> create_generator(opts ++ @defaults)
       _ -> usage()
     end
   end
 
-  def create_generator(context) do
-   context
+  def create_generator(opts) do
+    opts
+    |> build_context_from_opts()
     |> write_module_template()
     |> write_generator_module()
     |> print_shell_results()
@@ -28,6 +31,34 @@ defmodule Mix.Tasks.Degenerator do
     Mix.shell().info("""
     Usage: mix degenerator path
     """)
+  end
+
+  def build_context_from_opts(opts) do
+    project_root = Keyword.get(opts, :project_root, File.cwd!())
+
+    module =
+      opts
+      |> Keyword.fetch!(:module)
+      |> String.split(".")
+      |> Enum.map(&String.to_atom/1)
+      |> Module.safe_concat()
+
+    path = module.__info__(:compile)
+      |> Keyword.fetch!(:source)
+      |> Path.relative_to(project_root)
+
+    project = module |> Application.get_application() |> to_string
+
+    template_path = String.replace(path, project, "my_project")
+
+    %{
+      module: module,
+      project_root: project_root,
+      path: path,
+      template_path: template_path,
+      generator: Keyword.fetch!(opts, :generator),
+      original_options: opts
+    }
   end
 
   def prewalk({:defmodule, meta, lines}, acc) do
@@ -96,7 +127,7 @@ defmodule Mix.Tasks.Degenerator do
   end
 
   def generator_module(context) do
-    name = Keyword.get(context, :name)
+    name = Map.fetch!(context, :generator)
 
     "#{base()}.Gen.#{name}"
     |> String.split(".")
@@ -118,10 +149,11 @@ defmodule Mix.Tasks.Degenerator do
     files = [{:eex, "generator.ex", generator_path(context) <> ".ex"}]
 
     binding = [
+      template_path: Map.fetch!(context, :template_path),
       project: base(),
-      name_inflection: context |> Keyword.get(:name) |> inflect(),
-      module_inflection: Keyword.get(context, :module_inflection),
-      template_path: template_path(context),
+      name_inflection: context |> Map.fetch!(:generator) |> inflect(),
+      module_inflection: Map.fetch!(context, :module_inflection),
+      templates_path: template_path(context),
       generator_downcase_name: generator_downcase_name(context),
       app: Mix.Project.config() |> Keyword.fetch!(:app)
     ]
@@ -144,7 +176,7 @@ defmodule Mix.Tasks.Degenerator do
 
     {forms, comments} =
       context
-      |> Keyword.fetch!(:path)
+      |> Map.fetch!(:path)
       |> File.read!()
       |> Code.string_to_quoted_with_comments!(to_quoted_opts)
 
@@ -163,17 +195,18 @@ defmodule Mix.Tasks.Degenerator do
     doc = Code.Formatter.to_algebra(forms, to_algebra_opts)
     source = Inspect.Algebra.format(doc, 98) |> Enum.join()
 
-    target = Path.join(template_path(context), inflection.path) <> ".ex"
+    target = Path.join(template_path(context), context[:template_path])
+
     Mix.Generator.create_file(target, source)
 
     context
-    |> Keyword.put(:module_inflection, inflection)
-    |> Keyword.put(:full_module, full_module)
+    |> Map.put(:module_inflection, inflection)
+    |> Map.put(:full_module, full_module)
   end
 
   def print_shell_results(context) do
-    project = context |> Keyword.get(:full_module) |> List.first()
-    module = context |> Keyword.get(:full_module) |> List.last()
+    project = context |> Map.get(:full_module) |> List.first()
+    module = context |> Map.get(:full_module) |> List.last()
 
     Mix.shell().info("""
 
@@ -186,6 +219,7 @@ defmodule Mix.Tasks.Degenerator do
       > mix #{generator_downcase_name(context)} --project #{project} --module #{module}
 
     """)
+
     context
   end
 

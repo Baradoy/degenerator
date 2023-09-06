@@ -33,10 +33,15 @@ mix degenerator --path lib/path/to/existing/modules.ex
 
 - Support tests for the module being degenerated
 - Support pulling in additional modules
-- Explore removing
+- Supoport conditional sections, i.e. `--no-schema`
+- Detect which generator a file or module belongs too.
 
 
 ## Limitations
 
 - The generators that are created rely on Phoenix.Mix as at least a dev dependancy.
 - This might not work with umbrella projects in the slightest.
+
+## Bugs
+
+- Does not detect ProjectWeb correctly
