@@ -1,6 +1,6 @@
-defmodule Mix.Tasks.<%= project %>.Gen.<%= name_inflection.scoped %> do
+defmodule Mix.Tasks.<%= project %>.Gen.<%= generator_inflection.scoped %> do
   @moduledoc """
-    Generate a <%= name_inflection.singular %>
+    Generate a <%= generator_inflection.singular %>
 
     > mix <%= generator_downcase_name %>
 
@@ -13,8 +13,8 @@ defmodule Mix.Tasks.<%= project %>.Gen.<%= name_inflection.scoped %> do
       lib/my_project/my_module.ex
   """
 
-  @shortdoc "Generate a <%= name_inflection.singular %>"
-  @templates_path "<%= templates_path %>/"
+  @shortdoc "Generate a <%= generator_inflection.singular %>"
+  @templates_path "<%= templates_root %>/"
 
   @templates [
     %{path: "<%= template_path %>", default_module_name: "<%= module_inflection.scoped %>"}
@@ -34,17 +34,17 @@ defmodule Mix.Tasks.<%= project %>.Gen.<%= name_inflection.scoped %> do
     project = Keyword.get(opts, :project)
 
     for template <- @templates do
-      destinatin_path = destinatin_path(template[:path], project) |> dbg
+      destinatin_path = destinatin_path(template[:path], project)
 
-      module_name = Keyword.get(opts, :module_name, template[:default_module_name]) |> dbg
-      module_inflection = module_name |> Mix.Phoenix.inflect() |> Map.new() |> dbg
+      module_name = Keyword.get(opts, :module_name, template[:default_module_name])
+      module_inflection = module_name |> Mix.Phoenix.inflect() |> Map.new()
 
       files = [{:eex, template[:path], destinatin_path}]
       binding = [
         inflection: module_inflection, project: project, module_name: module_name
       ]
 
-      Mix.Phoenix.copy_from(generator_paths(), @templates_path, binding, files)
+      Mix.Phoenix.copy_from(generator_roots(), @templates_path, binding, files)
     end
 
     print_shell_instructions()
@@ -72,7 +72,7 @@ defmodule Mix.Tasks.<%= project %>.Gen.<%= name_inflection.scoped %> do
    ]
  end
 
- defp generator_paths, do: [".", :<%= app %>, :degenerator]
+ defp generator_roots, do: [".", :<%= app %>, :degenerator]
 
  defp destinatin_path(path, project) do
    project = project |> Macro.underscore() |> String.downcase()

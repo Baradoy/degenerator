@@ -43,20 +43,38 @@ defmodule Mix.Tasks.Degenerator do
       |> Enum.map(&String.to_atom/1)
       |> Module.safe_concat()
 
+    module_inflection = inflect(module)
+
     path = module.__info__(:compile)
       |> Keyword.fetch!(:source)
       |> Path.relative_to(project_root)
 
-    project = module |> Application.get_application() |> to_string
+    project = base()
+
+    generator =  Keyword.fetch!(opts, :generator)
+    generator_downcase_name = generator_downcase_name(generator)
+    generator_inflection = inflect(generator)
 
     template_path = String.replace(path, project, "my_project")
+    templates_root = template_path(generator)
+
+    target = Path.join(templates_root, template_path)
+
+    app = Mix.Project.config() |> Keyword.fetch!(:app)
 
     %{
       module: module,
+      module_inflection: module_inflection,
+      project: project,
       project_root: project_root,
       path: path,
       template_path: template_path,
-      generator: Keyword.fetch!(opts, :generator),
+      templates_root: templates_root,
+      generator: generator,
+      generator_inflection: generator_inflection,
+      generator_downcase_name: generator_downcase_name,
+      target: target,
+      app: app,
       original_options: opts
     }
   end
@@ -118,18 +136,16 @@ defmodule Mix.Tasks.Degenerator do
     {quoted, acc}
   end
 
-  def generator_path(context) do
-    "lib/mix/tasks/#{generator_downcase_name(context)}"
+  def generator_path(generator) do
+    "lib/mix/tasks/#{generator_downcase_name(generator)}"
   end
 
-  def template_path(context) do
-    "priv/templates/#{generator_downcase_name(context)}"
+  def template_path(generator) do
+    "priv/templates/#{generator_downcase_name(generator)}"
   end
 
-  def generator_module(context) do
-    name = Map.fetch!(context, :generator)
-
-    "#{base()}.Gen.#{name}"
+  def generator_module(generator) do
+    "#{base()}.Gen.#{generator}"
     |> String.split(".")
     |> Enum.map(&Macro.camelize/1)
     |> Enum.join(".")
@@ -137,8 +153,8 @@ defmodule Mix.Tasks.Degenerator do
 
   def base, do: Mix.Phoenix.base()
 
-  def generator_downcase_name(context) do
-    context
+  def generator_downcase_name(generator) do
+    generator
     |> generator_module()
     |> String.split(".")
     |> Enum.map(&Macro.underscore/1)
@@ -146,19 +162,10 @@ defmodule Mix.Tasks.Degenerator do
   end
 
   def write_generator_module(context) do
-    files = [{:eex, "generator.ex", generator_path(context) <> ".ex"}]
+    files = [{:eex, "generator.ex", generator_path(context.generator) <> ".ex"}]
+    binding = context |> Keyword.new()
 
-    binding = [
-      template_path: Map.fetch!(context, :template_path),
-      project: base(),
-      name_inflection: context |> Map.fetch!(:generator) |> inflect(),
-      module_inflection: Map.fetch!(context, :module_inflection),
-      templates_path: template_path(context),
-      generator_downcase_name: generator_downcase_name(context),
-      app: Mix.Project.config() |> Keyword.fetch!(:app)
-    ]
-
-    Mix.Phoenix.copy_from(generator_paths(), "priv/templates/degenerator", binding, files)
+    Mix.Phoenix.copy_from(generator_roots(), "priv/templates/degenerator", binding, files)
 
     context
   end
@@ -195,9 +202,7 @@ defmodule Mix.Tasks.Degenerator do
     doc = Code.Formatter.to_algebra(forms, to_algebra_opts)
     source = Inspect.Algebra.format(doc, 98) |> Enum.join()
 
-    target = Path.join(template_path(context), context[:template_path])
-
-    Mix.Generator.create_file(target, source)
+    Mix.Generator.create_file(context.target, source)
 
     context
     |> Map.put(:module_inflection, inflection)
@@ -212,11 +217,11 @@ defmodule Mix.Tasks.Degenerator do
 
     You can run this generator with:
 
-      > mix #{generator_downcase_name(context)}
+      > mix #{context.generator_downcase_name}
 
     Or pass in options:
 
-      > mix #{generator_downcase_name(context)} --project #{project} --module #{module}
+      > mix #{context.generator_downcase_name} --project #{project} --module #{module}
 
     """)
 
@@ -230,8 +235,11 @@ defmodule Mix.Tasks.Degenerator do
     |> inflect()
   end
 
+  defp inflect(singular) when is_atom(singular),
+    do: singular |> Atom.to_string() |> inflect()
+
   defp inflect(singular) when is_binary(singular),
     do: singular |> Mix.Phoenix.inflect() |> Map.new()
 
-  defp generator_paths, do: [".", :degenerator]
+  defp generator_roots, do: [".", :degenerator]
 end
