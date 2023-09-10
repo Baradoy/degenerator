@@ -1,23 +1,23 @@
-defmodule Mix.Tasks.<%= project %>.Gen.<%= generator_inflection.scoped %> do
+defmodule Mix.Tasks.<%= generator.alias %> do
   @moduledoc """
-    Generate a <%= generator_inflection.singular %>
+    Generate a <%= module.alias %> Module
 
-    > mix <%= generator_downcase_name %>
+    > mix <%= generator.lowercase %>
 
     will create
-      lib/<%= project %>/<%= module_inflection.path %>.ex
+      <%= module.path %>
 
-    > mix <%= generator_downcase_name %> --project MyProject --module MyModule
+    > mix <%= generator.lowercase %> --project MyProject --module MyModule
 
     will create
       lib/my_project/my_module.ex
   """
 
-  @shortdoc "Generate a <%= generator_inflection.singular %>"
+  @shortdoc "Generate a <%= module.alias %> Module"
   @templates_path "<%= templates_root %>/"
 
   @templates [
-    %{path: "<%= template_path %>", default_module_name: "<%= module_inflection.scoped %>"}
+    %{path: "<%= template_path %>", default_module_name: "<%= module.alias %>"}
   ]
 
  use Mix.Task
@@ -59,7 +59,7 @@ defmodule Mix.Tasks.<%= project %>.Gen.<%= generator_inflection.scoped %> do
 
  defp usage do
    Mix.shell().info("""
-   Usage: mix <%= generator_downcase_name %>
+   Usage: mix <%= generator.lowercase %>
    """)
  end
 
@@ -68,7 +68,7 @@ defmodule Mix.Tasks.<%= project %>.Gen.<%= generator_inflection.scoped %> do
 
    [
      project: base,
-     module_name: "<%= module_inflection.scoped %>"
+     module_name: "<%= module.alias %>"
    ]
  end
 
