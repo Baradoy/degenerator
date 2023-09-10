@@ -7,14 +7,11 @@ defmodule Mix.Tasks.Degenerator do
   use Mix.Task
 
   @requirements ["app.config"]
-
-  @defaults [
-    generator: "generator"
-  ]
+  @mix_task_path "lib/mix/tasks"
 
   def run(args) do
-    case OptionParser.parse(args, switches: [name: :string, path: :string, project_root: :string]) do
-      {opts, [], []} -> create_generator(opts ++ @defaults)
+    case OptionParser.parse(args, switches: [module: :string, project_root: :string, app: :string]) do
+      {opts, [], []} -> create_generator(opts)
       _ -> usage()
     end
   end
@@ -29,7 +26,10 @@ defmodule Mix.Tasks.Degenerator do
 
   defp usage do
     Mix.shell().info("""
-    Usage: mix degenerator path
+    Basic Usage:
+      mix degenerator --module MyProject.MyModule
+
+
     """)
   end
 
@@ -39,7 +39,7 @@ defmodule Mix.Tasks.Degenerator do
     module = opts |> Keyword.fetch!(:module) |> inflect()
     project = base() |> inflect
 
-    generator = inflect_new("Mix.Tasks.#{project.base}.Gen.#{Keyword.fetch!(opts, :generator)}")
+    generator = select_generator(project, module)
 
     template_path = String.replace(module.path, to_string(module.base), "my_project")
     templates_root = template_path(generator)
@@ -60,19 +60,6 @@ defmodule Mix.Tasks.Degenerator do
       original_options: opts
     }
   end
-
-  # def prewalk({:defmodule, meta, lines}, acc) do
-  #   # Pull basic module info out of the file
-  #   [{:__aliases__, _aliases_meta, [base | scoped] = full_module} | _] = lines
-
-  #   new_acc =
-  #     acc
-  #     |> Keyword.put(:full_module, full_module)
-  #     # |> Keyword.put(:inflection, inflect(scoped))
-  #     |> Keyword.put(:base, base)
-
-  #   {{:defmodule, meta, lines}, new_acc}
-  # end
 
   def prewalk({:moduledoc, moduledoc_meta, moduledoc}, acc) do
     # TODO add generator info to moduledoc
@@ -183,6 +170,43 @@ defmodule Mix.Tasks.Degenerator do
     context
   end
 
+  def select_generator(project, module) do
+    default = inflect("Mix.Tasks.#{project.base}.Gen.#{module.alias}")
+
+    tasks =
+      case File.ls(@mix_task_path) do
+        {:ok, tasks} ->
+          tasks
+          |> Enum.map(&Path.join(@mix_task_path, &1))
+          |> Enum.map(&String.trim_leading(&1, "lib/"))
+          |> Enum.map(&String.trim_trailing(&1, ".ex"))
+          |> Enum.map(&inflect/1)
+          |> List.insert_at(-1, default)
+          |> Enum.uniq()
+          |> Enum.sort(fn a, _b -> a.existing? end)
+
+        {:error, :enoent} ->
+          [default]
+      end
+
+    Enum.reduce_while(tasks, nil, &prompt_for_generator/2)
+  end
+
+  defp prompt_for_generator(task, acc) do
+    prompt = case task do
+      %{existing?: true} ->
+        "#{IO.ANSI.green()}* #{IO.ANSI.reset()}Use exisitng generator task #{IO.ANSI.bright()}#{task.lowercase}#{IO.ANSI.reset()}?"
+
+      %{existing?: false} ->
+        "#{IO.ANSI.green()}* #{IO.ANSI.reset()}Create new generator task #{IO.ANSI.bright()}#{task.lowercase}#{IO.ANSI.reset()}?"
+    end
+
+    case Mix.shell().yes?(prompt) do
+      true -> {:halt, task}
+      false -> {:cont, acc}
+    end
+  end
+
   defp inflect(aliases) when is_list(aliases) do
     aliases
     |> Enum.map(&Atom.to_string/1)
@@ -198,63 +222,52 @@ defmodule Mix.Tasks.Degenerator do
       module
       |> Macro.camelize()
       |> String.split(".")
-      |> Enum.map(&String.to_atom/1)
-
-    module = Module.concat(module_components)
-
-    base = List.first(module_components)
-    alias = List.last(module_components)
-
-    lowercase = alias |> to_string() |> Macro.underscore()
-
-    path =
-      module.__info__(:compile)
-      |> Keyword.fetch!(:source)
-      |> Path.relative_to_cwd()
-
-    %{
-      alias: alias,
-      lowercase: lowercase,
-      module: module,
-      path: path,
-      base: base
-    }
-  end
-
-  defp inflect_new(module) do
-    module_components =
-      module
-      |> Macro.camelize()
-      |> String.split(".")
       |> Enum.map(&Macro.camelize/1)
       |> Enum.map(&String.to_atom/1)
 
-    module = module_components |> Enum.join(".") |> String.to_atom()
+    module = Module.concat(module_components)
 
     {base, alias} =
       case module_components do
         [:Mix, :Tasks | alias] ->
           {Mix.Task, alias |> Enum.join(".") |> String.to_atom()}
+
+        components ->
+          {List.first(components), List.last(components)}
       end
+
+    existing? = Code.ensure_loaded?(module)
 
     lowercase =
       alias
-      |> to_string()
+      |> Atom.to_string()
+      |> String.trim_leading("Elixir.")
       |> String.split(".")
       |> Enum.map(&Macro.underscore/1)
       |> Enum.join(".")
 
+    path_base =
+      base
+      |> Atom.to_string()
+      |> String.trim_leading("Elixir.")
+      |> Macro.underscore()
+
     path =
-      "lib/" <>
-        (base |> to_string() |> Macro.underscore()) <>
-        "/" <> lowercase <> ".ex"
+      case existing? do
+        false ->
+          Path.join(["lib", path_base, lowercase <> ".ex"])
+
+        true ->
+          module.__info__(:compile) |> Keyword.fetch!(:source) |> Path.relative_to_cwd()
+      end
 
     %{
       alias: alias,
       lowercase: lowercase,
       module: module,
       path: path,
-      base: base
+      base: base,
+      existing?: existing?
     }
   end
 
