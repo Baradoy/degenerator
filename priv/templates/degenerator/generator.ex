@@ -16,7 +16,7 @@ defmodule Mix.Tasks.<%= generator.alias %> do
   @shortdoc "Generate a <%= module.alias %> Module"
   @templates_path "<%= templates_root %>/"
 
-  @templates [
+  @module_templates [
     %{path: "<%= template_path %>", default_module_name: "<%= module.alias %>"}
   ]
 
@@ -33,7 +33,7 @@ defmodule Mix.Tasks.<%= generator.alias %> do
   def generate(opts) do
     project = Keyword.get(opts, :project)
 
-    for template <- @templates do
+    for template <- @module_templates do
       destinatin_path = destinatin_path(template[:path], project)
 
       module_name = Keyword.get(opts, :module_name, template[:default_module_name])

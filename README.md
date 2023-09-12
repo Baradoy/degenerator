@@ -26,13 +26,16 @@ mix archive.install github baradoy/degenerator
 
 You can create a generator from an existing module with:
 ```bash
-mix degenerator --path lib/path/to/existing/modules.ex
+mix degenerator --module MyProject.MyModule
 ```
+
+Subsequent runs of `degenerator` will ask if you wish to add the module to an existing generator or create a new generator.
 
 ## Roadmap
 
+- A big refactor to organize code and reduce complexity and add tests
+- Allow naming the generator for easier reuse / extention of generators.
 - Support tests for the module being degenerated
-- Support pulling in additional modules
 - Supoport conditional sections, i.e. `--no-schema`
 - Detect which generator a file or module belongs too.
 
