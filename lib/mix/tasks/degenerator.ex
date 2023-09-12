@@ -6,6 +6,8 @@ defmodule Mix.Tasks.Degenerator do
 
   use Mix.Task
 
+  alias Degenerator.Inflection
+
   @requirements ["app.config"]
   @mix_task_path "lib/mix/tasks"
 
@@ -29,15 +31,14 @@ defmodule Mix.Tasks.Degenerator do
     Basic Usage:
       mix degenerator --module MyProject.MyModule
 
-
     """)
   end
 
   def build_context_from_opts(opts) do
     project_root = Keyword.get(opts, :project_root, File.cwd!())
 
-    module = opts |> Keyword.fetch!(:module) |> inflect()
-    project = base() |> inflect
+    module = opts |> Keyword.fetch!(:module) |> Inflection.new()
+    project = base() |> Inflection.new()
 
     generator = select_generator(project, module)
 
@@ -223,7 +224,7 @@ defmodule Mix.Tasks.Degenerator do
   end
 
   def select_generator(project, module) do
-    default = inflect("Mix.Tasks.#{project.base}.Gen.#{module.alias}")
+    default = Inflection.new("Mix.Tasks.#{project.base}.Gen.#{module.alias}")
 
     tasks =
       case File.ls(@mix_task_path) do
@@ -232,7 +233,7 @@ defmodule Mix.Tasks.Degenerator do
           |> Enum.map(&Path.join(@mix_task_path, &1))
           |> Enum.map(&String.trim_leading(&1, "lib/"))
           |> Enum.map(&String.trim_trailing(&1, ".ex"))
-          |> Enum.map(&inflect/1)
+          |> Enum.map(&Inflection.new/1)
           |> List.insert_at(-1, default)
           |> Enum.uniq()
           |> Enum.sort(fn a, _b -> a.existing? end)
@@ -258,70 +259,6 @@ defmodule Mix.Tasks.Degenerator do
       true -> {:halt, task}
       false -> {:cont, acc}
     end
-  end
-
-  defp inflect(aliases) when is_list(aliases) do
-    aliases
-    |> Enum.map(&Atom.to_string/1)
-    |> Enum.join(".")
-    |> inflect()
-  end
-
-  defp inflect(singular) when is_atom(singular),
-    do: singular |> Atom.to_string() |> inflect()
-
-  defp inflect(module) when is_binary(module) do
-    module_components =
-      module
-      |> Macro.camelize()
-      |> String.split(".")
-      |> Enum.map(&Macro.camelize/1)
-      |> Enum.map(&String.to_atom/1)
-
-    module = Module.concat(module_components)
-
-    {base, alias} =
-      case module_components do
-        [:Mix, :Tasks | alias] ->
-          {Mix.Tasks, alias |> Enum.join(".") |> String.to_atom()}
-
-        components ->
-          {List.first(components), List.last(components)}
-      end
-
-    existing? = Code.ensure_loaded?(module)
-
-    lowercase =
-      alias
-      |> Atom.to_string()
-      |> String.trim_leading("Elixir.")
-      |> String.split(".")
-      |> Enum.map(&Macro.underscore/1)
-      |> Enum.join(".")
-
-    path_base =
-      base
-      |> Atom.to_string()
-      |> String.trim_leading("Elixir.")
-      |> Macro.underscore()
-
-    path =
-      case existing? do
-        false ->
-          Path.join(["lib", path_base, lowercase <> ".ex"])
-
-        true ->
-          module.__info__(:compile) |> Keyword.fetch!(:source) |> Path.relative_to_cwd()
-      end
-
-    %{
-      alias: alias,
-      lowercase: lowercase,
-      module: module,
-      path: path,
-      base: base,
-      existing?: existing?
-    }
   end
 
   defp generator_roots, do: [".", :degenerator]
