@@ -19,8 +19,8 @@ defmodule Mix.Tasks.Degenerator do
   def create_generator(opts) do
     opts
     |> build_context_from_opts()
-    |> write_module_template()
     |> write_generator_module()
+    |> write_module_template()
     |> print_shell_results()
   end
 
