@@ -130,7 +130,7 @@ defmodule Mix.Tasks.Degenerator do
 
           # TODO: This should be a component that is evaluated to stop duplication between here and the template
           new_template =
-            ~s(%{path: "#{context.template_path}", default_module_name: "#{context.module.alias}"})
+            ~s(%{path: "#{context.template_path}", default_module_name: "#{context.module.alias}", lowercase: "#{context.module.lowercase}"})
 
           new_quoted_template = Code.string_to_quoted!(new_template, to_quoted_opts())
 
