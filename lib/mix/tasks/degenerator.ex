@@ -67,7 +67,6 @@ defmodule Mix.Tasks.Degenerator do
   end
 
   def prewalk({:moduledoc, moduledoc_meta, moduledoc}, acc) do
-    # TODO add generator info to moduledoc
     {{:moduledoc, moduledoc_meta, moduledoc}, acc}
   end
 
@@ -114,8 +113,6 @@ defmodule Mix.Tasks.Degenerator do
         {:@, _, [{:templates, _, [{:__block__, _, _}]}]} = quoted,
         context
       ) do
-    # TODO: There is a real refactor opertunity for this function
-
     updated_quoted =
       update_in(
         quoted,
@@ -128,7 +125,7 @@ defmodule Mix.Tasks.Degenerator do
           Access.at(0)
         ],
         fn templates_path_block ->
-          # TODO: We can look for and replace duplicates by evaluating the AST
+          # FUture: We can look for and replace duplicates by evaluating the AST
           #   {templates, _biding} = Code.eval_quoted(templates_path_block)
           #   and navigating that AST
 
@@ -235,20 +232,17 @@ defmodule Mix.Tasks.Degenerator do
   end
 
   defp build_template_map(module, subject) do
-    module |> dbg
-    source = build_template_source_path(module, subject) |> dbg
+    source = build_template_source_path(module, subject)
 
     dest =
       module.path
       |> String.replace(to_string(module.plural), "<%= plural %>")
       |> String.replace(to_string(module.singular), "<%= singular %>")
-      |> dbg
 
     namespace =
       module.namespace
       |> to_string()
       |> String.replace(to_string(module.base), "<%= base %>")
-      |> dbg
 
     %{
       source: source,
@@ -256,7 +250,6 @@ defmodule Mix.Tasks.Degenerator do
       subject: subject,
       namespace: namespace
     }
-    |> dbg
   end
 
   defp build_template_source_path(module, subject),
