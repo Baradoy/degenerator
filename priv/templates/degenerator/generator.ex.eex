@@ -1,0 +1,100 @@
+defmodule Mix.Tasks.<%= generator.camelized %> do
+  @moduledoc """
+  Generate a <%= module.camelized %> Module
+
+  > mix <%= generator.singular %>
+
+  will create
+    <%= module.path %>
+
+  > mix <%= generator.singular %> --<%= subject %> <%= subject %>
+
+  will create
+    lib/my_project/my_module.ex
+  """
+
+  @shortdoc "Generate a <%= module.camelized %> Module"
+  @templates_path "<%= templates_root %>/"
+
+  @templates [<%= inspect(template_map) %>]
+
+  use Mix.Task
+
+  alias Degenerator.Inflection
+
+  @impl Mix.Task
+  def run(args) do
+    case OptionParser.parse(args, strict: [{:project, :string} | build_module_switches()]) do
+      {opts, [], []} -> generate(opts ++ defaults())
+      _ -> usage()
+    end
+  end
+
+  def generate(opts) do
+    for template <- @templates do
+      namespace = template[:namespace] |> EEx.eval_string([base: base()]) |> String.to_atom()
+      subject = template[:subject] |> String.to_atom() |> then(&Keyword.fetch!(opts, &1)) |> Inflection.new([namespace: namespace])
+
+      source = template[:source]
+      bindings = [{:timestamp, timestamp()} | Map.to_list(subject)]
+      dest = EEx.eval_string(template[:dest], bindings)
+
+      files = [{:eex, source, dest}]
+      binding = [subject: subject]
+
+      Mix.Phoenix.copy_from(generator_roots(), @templates_path, binding, files)
+    end
+
+    print_shell_instructions()
+  end
+
+  @doc false
+  def print_shell_instructions() do
+    Mix.shell().info("""
+    Additional instructions
+    """)
+  end
+
+  defp usage do
+    options =
+      @templates
+      |> Enum.map(fn template ->
+        ~s(--#{template.subject} Subject [--#{template.subject}_plural Subjectories])
+      end)
+      |> Enum.join(" ")
+      |> String.replace("_", "-")
+
+    Mix.shell().info("""
+    Usage: mix <%= generator.singular %> #{options}
+    """)
+  end
+
+  defp defaults do
+    base = Mix.Project.config() |> Keyword.fetch!(:app) |> to_string() |> Macro.camelize()
+
+    [project: base]
+  end
+
+  defp generator_roots, do: [".", :<%= project.singular %>, :degenerator]
+
+  # Build switches based off of the given module templates
+  # When there are multiple modules in a generator, we need to override them individually
+  defp build_module_switches() do
+    Enum.flat_map(@templates, fn template ->
+      [
+        {(template.subject) |> String.to_atom(), :string},
+        {(template.subject <> "_plural") |> String.to_atom(), :string}
+      ]
+    end)
+  end
+
+  defp timestamp do
+    {{y, m, d}, {hh, mm, ss}} = :calendar.universal_time()
+    "#{y}#{pad(m)}#{pad(d)}#{pad(hh)}#{pad(mm)}#{pad(ss)}"
+  end
+
+  defp pad(i) when i < 10, do: <<?0, ?0 + i>>
+  defp pad(i), do: to_string(i)
+
+  def base, do: Mix.Project.config() |> Keyword.fetch!(:app) |> to_string() |> Macro.camelize()
+end

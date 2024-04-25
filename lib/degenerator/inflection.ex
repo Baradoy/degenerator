@@ -1,97 +1,162 @@
 defmodule Degenerator.Inflection do
   @moduledoc """
-    Holds different representations of the same module.
+  Provides inflection for an atom. Usefull for metaprogramming and whatnot.
 
-    ## Examples
+  ## Examples
 
-      Inflection.new(Degenerator.Inflection)
-      #=> %Degenerator.Inflection{
-        alias: :Inflection,
-        base: Elixir,
-        existing?: true,
-        lowercase: "inflection",
-        module: Degenerator.Inflection,
-        path: "/Users/baradoy/Code/degenerator/lib/degenerator/inflection.ex"
-      }
+    iex> Degenerator.Inflection.new(:patient, namespace: Degenerator.Schema)
+    %Degenerator.Inflection{
+      singular: :patient,
+      plural: :patients,
+      id: :patient_id,
+      camelized: :Patient,
+      context: :Patients,
+      base: :Degenerator,
+      namespace: Degenerator.Schema,
+      module: Degenerator.Schema.Patient,
+      split: ["Degenerator", "Schema", "Patient"],
+      existing?: false
+    }
 
+    iex> Degenerator.Inflection.new(Degenerator.Schema.AuditEvent)
+    %Degenerator.Inflection{
+      singular: :audit_event,
+      plural: :audit_events,
+      id: :audit_event_id,
+      camelized: :AuditEvent,
+      context: :AuditEvents,
+      base: :Degenerator,
+      namespace: Degenerator.Schema,
+      module: Degenerator.Schema.AuditEvent,
+      split: ["Degenerator", "Schema", "AuditEvent"],
+      existing?: false
+    }
+
+    iex> Degenerator.Inflection.new(:factory, plural: :factories)
+    %Degenerator.Inflection{
+      singular: :factory,
+      plural: :factories,
+      id: :factory_id,
+      camelized: :Factory,
+      context: :Factories,
+      base: :Degenerator,
+      namespace: Degenerator,
+      module: Degenerator.Factory,
+      split: ["Degenerator", "Factory"],
+      existing?: false
+    }
   """
 
-  @type t() :: %__MODULE__{
-          alias: atom(),
-          base: atom(),
-          existing?: boolean(),
-          lowercase: String.t(),
-          module: atom(),
-          path: String.t()
-        }
+  defstruct [
+    :singular,
+    :plural,
+    :id,
+    :camelized,
+    :context,
+    :base,
+    :namespace,
+    :module,
+    :split,
+    :path,
+    :existing?
+  ]
 
-  defstruct [:alias, :base, :existing?, :lowercase, :module, :path]
+  def new(module, opts \\ [])
 
-  @doc "Create an inflection from a module"
-  @spec new(atom() | String.t()) :: t()
-  def new(module) when is_atom(module),
-    do: module |> Atom.to_string() |> new()
+  def new("Elixir." <> module, opts) do
+    split = ("Elixir." <> module) |> Module.split() |> List.delete("Elixir")
+    namespace = namespace(split, opts)
+    singular = singular(split, namespace)
 
-  def new(module_string) when is_binary(module_string) do
-    %__MODULE__{}
-    |> build_module_components(module_string)
-    |> check_existing()
-    |> build_lowercase()
-    |> build_path()
+    module = Module.concat(split)
+    plural = Keyword.get_lazy(opts, :plural, fn -> :"#{singular}s" end)
+    id = Keyword.get_lazy(opts, :id, fn -> :"#{singular}_id" end)
+    camelized = camelize(singular)
+    context = camelize(plural)
+    base = base(opts)
+    path = path(module)
+    existing = Code.ensure_loaded?(module)
+
+    %__MODULE__{
+      singular: singular,
+      plural: plural,
+      id: id,
+      camelized: camelized,
+      context: context,
+      base: base,
+      namespace: namespace,
+      module: module,
+      split: split,
+      path: path,
+      existing?: existing
+    }
   end
 
-  defp build_module_components(inflection, module_string) do
-    {module, base, alias} = module_string |> module_components() |> decompose_components()
+  def new(module, opts) when is_binary(module) do
+    case Keyword.fetch(opts, :namespace) do
+      {:ok, namespace} ->
+        new(Atom.to_string(namespace) <> "." <> Atom.to_string(camelize(module)), opts)
 
-    %{inflection | module: module, base: base, alias: alias}
+      :error ->
+        new(
+          "Elixir." <> Atom.to_string(base(opts)) <> "." <> Atom.to_string(camelize(module)),
+          opts
+        )
+    end
   end
 
-  defp check_existing(inflection) do
-    %{inflection | existing?: Code.ensure_loaded?(inflection.module)}
-  end
+  def new(module, opts) when is_atom(module), do: new(Atom.to_string(module), opts)
 
-  defp build_lowercase(inflection) do
-    lowercase =
-      inflection.alias
-      |> Atom.to_string()
-      |> String.trim_leading("Elixir.")
-      |> String.split(".")
-      |> Enum.map(&Macro.underscore/1)
-      |> Enum.join(".")
-
-    %{inflection | lowercase: lowercase}
-  end
-
-  defp build_path(inflection) when inflection.existing? do
-    path =
-      inflection.module.__info__(:compile) |> Keyword.fetch!(:source) |> Path.relative_to_cwd()
-
-    %{inflection | path: path}
-  end
-
-  defp build_path(inflection) when not inflection.existing? do
-    path_base =
-      inflection.base
-      |> Atom.to_string()
-      |> String.trim_leading("Elixir.")
-      |> Macro.underscore()
-
-    path = Path.join(["lib", path_base, inflection.lowercase <> ".ex"])
-
-    %{inflection | path: path}
-  end
-
-  defp module_components(module) do
-    module
-    |> Macro.camelize()
+  # :healthcare_service -> HealthcareService
+  def camelize(singular) do
+    singular
+    |> to_string()
     |> String.split(".")
     |> Enum.map(&Macro.camelize/1)
-    |> Enum.map(&String.to_atom/1)
+    |> Enum.join(".")
+    |> String.to_atom()
   end
 
-  defp decompose_components([:Mix, :Tasks | alias] = components),
-    do: {Module.concat(components), Mix.Tasks, alias |> Enum.join(".") |> String.to_atom()}
+  defp namespace(module_split, opts) do
+    default =
+      module_split
+      |> case do
+        [_] -> module_split
+        [_ | _] -> List.delete_at(module_split, -1)
+      end
+      |> Module.concat()
 
-  defp decompose_components(components),
-    do: {Module.concat(components), List.first(components), List.last(components)}
+    Keyword.get(opts, :namespace, default)
+  end
+
+  defp singular(module_split, namespace) do
+    module_split
+    |> strip_namespace(Module.split(namespace))
+    |> Enum.map(&Macro.underscore/1)
+    |> Enum.join(".")
+    |> String.to_atom()
+  end
+
+  defp strip_namespace(module_split, []), do: module_split
+
+  defp strip_namespace([h], [h]), do: [h]
+
+  defp strip_namespace([h | module_split], [h | namespace_split]),
+    do: strip_namespace(module_split, namespace_split)
+
+  defp strip_namespace(module_split, _), do: [List.last(module_split)]
+
+  defp path(module) do
+    case Code.ensure_loaded?(module) do
+      true -> module.__info__(:compile) |> Keyword.fetch!(:source) |> Path.relative_to_cwd()
+      false -> nil
+    end
+  end
+
+  defp base(opts) do
+    case Keyword.fetch(opts, :base) do
+      {:ok, base} -> camelize(base)
+      :error -> Mix.Project.config() |> Keyword.fetch!(:app) |> camelize()
+    end
+  end
 end
