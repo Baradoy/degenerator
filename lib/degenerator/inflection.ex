@@ -112,8 +112,7 @@ defmodule Degenerator.Inflection do
     singular
     |> to_string()
     |> String.split(".")
-    |> Enum.map(&Macro.camelize/1)
-    |> Enum.join(".")
+    |> Enum.map_join(".", &Macro.camelize/1)
     |> String.to_atom()
   end
 
@@ -132,8 +131,7 @@ defmodule Degenerator.Inflection do
   defp singular(module_split, namespace) do
     module_split
     |> strip_namespace(Module.split(namespace))
-    |> Enum.map(&Macro.underscore/1)
-    |> Enum.join(".")
+    |> Enum.map_join(".", &Macro.underscore/1)
     |> String.to_atom()
   end
 
