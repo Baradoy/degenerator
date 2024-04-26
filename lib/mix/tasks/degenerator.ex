@@ -5,6 +5,8 @@ defmodule Mix.Tasks.Degenerator do
 
   use Mix.Task
 
+  import Degenerator.Inflection, only: [is_inflection: 1]
+
   alias Degenerator.Inflection
 
   @requirements ["app.config"]
@@ -41,7 +43,7 @@ defmodule Mix.Tasks.Degenerator do
     subject = Keyword.get(opts, :subject, "subject")
     generator = build_context_generator(opts)
 
-    template_map = build_template_map(module, subject)
+    template_map = module |> build_template_map(subject)
 
     template_path = String.replace(module.path, to_string(module.base), "my_project")
     templates_root = template_path(generator)
@@ -231,7 +233,7 @@ defmodule Mix.Tasks.Degenerator do
     ] ++ opts
   end
 
-  defp build_template_map(module, subject) do
+  defp build_template_map(module, subject) when is_inflection(module) do
     source = build_template_source_path(module, subject)
 
     dest =
