@@ -7,6 +7,7 @@ defmodule Mix.Tasks.Degenerator do
 
   import Degenerator.Inflection, only: [is_inflection: 1]
 
+  alias Degenerator.Code
   alias Degenerator.Inflection
 
   @requirements ["app.config"]
@@ -132,7 +133,7 @@ defmodule Mix.Tasks.Degenerator do
           #   and navigating that AST
 
           new_template = context.module |> build_template_map(context.subject) |> inspect()
-          new_quoted_template = Code.string_to_quoted!(new_template, to_quoted_opts())
+          new_quoted_template = Code.string_to_quoted!(new_template)
 
           templates_path_block ++ [new_quoted_template]
         end
@@ -161,52 +162,25 @@ defmodule Mix.Tasks.Degenerator do
   end
 
   def write_generator_module(context) when context.generator.existing? do
-    {forms, comments} =
-      context.generator.path
-      |> File.read!()
-      |> Code.string_to_quoted_with_comments!(to_quoted_opts())
-
-    {forms, context} =
-      Macro.postwalk(
-        forms,
-        context,
-        &generator_postwalk/2
-      )
-
-    to_algebra_opts = [comments: comments]
-    doc = Code.Formatter.to_algebra(forms, to_algebra_opts)
-    source = Inspect.Algebra.format(doc, 98) |> Enum.join()
-
-    Mix.Generator.create_file(context.generator.path, source)
-
-    context
+    Code.write_after_traversal(
+      context.generator.path,
+      context.generator.path,
+      context,
+      postwalk: &generator_postwalk/2
+    )
   end
 
   def write_module_template(context) do
-    {forms, comments} =
-      context.module.path
-      |> File.read!()
-      |> Code.string_to_quoted_with_comments!(to_quoted_opts())
+    source = context.module.path
 
-    {forms, context} =
-      Macro.traverse(
-        forms,
-        context,
-        &prewalk/2,
-        &postwalk/2
-      )
-
-    to_algebra_opts = [comments: comments]
-    doc = Code.Formatter.to_algebra(forms, to_algebra_opts)
-    source = Inspect.Algebra.format(doc, 98) |> Enum.join()
-
-    target_path =
+    target =
       template_path(context.generator) <>
         "/" <> build_template_source_path(context.module, context.subject)
 
-    Mix.Generator.create_file(target_path, source)
-
-    context
+    Code.write_after_traversal(source, target, context,
+      prewalk: &prewalk/2,
+      postwalk: &postwalk/2
+    )
   end
 
   def print_shell_results(context) do
@@ -222,16 +196,6 @@ defmodule Mix.Tasks.Degenerator do
   end
 
   defp generator_roots, do: [".", :degenerator]
-
-  def to_quoted_opts(opts \\ []) do
-    [
-      unescape: false,
-      warn_on_unnecessary_quotes: false,
-      literal_encoder: &{:ok, {:__block__, &2, [&1]}},
-      token_metadata: true,
-      warnings: false
-    ] ++ opts
-  end
 
   defp build_template_map(module, subject) when is_inflection(module) do
     source = build_template_source_path(module, subject)
