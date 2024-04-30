@@ -3,9 +3,11 @@ defmodule Degenerator.Code do
   Traverse and modify code
   """
 
+  alias Degenerator.Code.Quoted
+
   def write_after_traversal(source_path, target_path, context, opts \\ []) do
-    prewalk = Keyword.get(opts, :prewalk, &passthrough/2)
-    postwalk = Keyword.get(opts, :postwalk, &passthrough/2)
+    prewalk = Keyword.get(opts, :prewalk, &Quoted.passthrough/2)
+    postwalk = Keyword.get(opts, :postwalk, &Quoted.passthrough/2)
 
     {forms, comments} =
       source_path
@@ -40,6 +42,4 @@ defmodule Degenerator.Code do
       warnings: false
     ] ++ opts
   end
-
-  def passthrough(quoted, acc), do: {quoted, acc}
 end

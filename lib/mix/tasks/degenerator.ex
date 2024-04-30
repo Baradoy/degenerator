@@ -112,40 +112,6 @@ defmodule Mix.Tasks.Degenerator do
     {quoted, acc}
   end
 
-  def generator_postwalk(
-        {:@, _, [{:templates, _, [{:__block__, _, _}]}]} = quoted,
-        context
-      ) do
-    updated_quoted =
-      update_in(
-        quoted,
-        [
-          Access.elem(2),
-          Access.at(0),
-          Access.elem(2),
-          Access.at(0),
-          Access.elem(2),
-          Access.at(0)
-        ],
-        fn templates_path_block ->
-          # FUture: We can look for and replace duplicates by evaluating the AST
-          #   {templates, _biding} = Code.eval_quoted(templates_path_block)
-          #   and navigating that AST
-
-          new_template = context.module |> build_template_map(context.subject) |> inspect()
-          new_quoted_template = Code.string_to_quoted!(new_template)
-
-          templates_path_block ++ [new_quoted_template]
-        end
-      )
-
-    {updated_quoted, context}
-  end
-
-  def generator_postwalk(quoted, acc) do
-    {quoted, acc}
-  end
-
   def template_path(generator) do
     "priv/templates/#{generator.singular}"
   end
@@ -162,11 +128,15 @@ defmodule Mix.Tasks.Degenerator do
   end
 
   def write_generator_module(context) when context.generator.existing? do
+    source = context.generator.path
+    target = context.generator.path
+    new_template = context.module |> build_template_map(context.subject) |> inspect()
+
     Code.write_after_traversal(
-      context.generator.path,
-      context.generator.path,
+      source,
+      target,
       context,
-      postwalk: &generator_postwalk/2
+      postwalk: Code.Quoted.module_attribute_append(new_template, :templates)
     )
   end
 
