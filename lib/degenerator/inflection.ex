@@ -15,7 +15,8 @@ defmodule Degenerator.Inflection do
       namespace: Degenerator.Schema,
       module: Degenerator.Schema.Patient,
       split: ["Degenerator", "Schema", "Patient"],
-      existing?: false
+      existing?: false,
+      path: nil
     }
 
     iex> Degenerator.Inflection.new(Degenerator.Schema.AuditEvent)
@@ -29,7 +30,8 @@ defmodule Degenerator.Inflection do
       namespace: Degenerator.Schema,
       module: Degenerator.Schema.AuditEvent,
       split: ["Degenerator", "Schema", "AuditEvent"],
-      existing?: false
+      existing?: false,
+      path: nil
     }
 
     iex> Degenerator.Inflection.new(:factory, plural: :factories)
@@ -40,10 +42,56 @@ defmodule Degenerator.Inflection do
       camelized: :Factory,
       context: :Factories,
       base: :Degenerator,
-      namespace: Degenerator,
+      namespace: :Degenerator,
       module: Degenerator.Factory,
       split: ["Degenerator", "Factory"],
-      existing?: false
+      existing?: false,
+      path: nil
+    }
+
+    iex> Degenerator.Inflection.new(:inflection)
+    %Degenerator.Inflection{
+      singular: :inflection,
+      plural: :inflections,
+      id: :inflection_id,
+      camelized: :Inflection,
+      context: :Inflections,
+      base: :Degenerator,
+      namespace: :Degenerator,
+      module: Degenerator.Inflection,
+      split: ["Degenerator", "Inflection"],
+      existing?: true,
+      path: "lib/degenerator/inflection.ex"
+    }
+
+    iex> Degenerator.Inflection.new("Degenerator.Inflection")
+    %Degenerator.Inflection{
+      singular: :inflection,
+      plural: :inflections,
+      id: :inflection_id,
+      camelized: :Inflection,
+      context: :Inflections,
+      base: :Degenerator,
+      namespace: :Degenerator,
+      module: Degenerator.Inflection,
+      split: ["Degenerator", "Inflection"],
+      existing?: true,
+      path: "lib/degenerator/inflection.ex"
+    }
+
+    iex> Degenerator.Inflection.new(:Degenerator)
+    %Degenerator.Inflection{
+      singular: :degenerator,
+      plural: :degenerators,
+      id: :degenerator_id,
+      camelized: :Degenerator,
+      context: :Degenerators,
+      base: :Degenerator,
+      namespace: :Degenerator,
+      module: Degenerator.Degenerator,
+      split: ["Degenerator", "Degenerator"],
+      existing?: false,
+      path: nil
     }
   """
 
@@ -61,19 +109,23 @@ defmodule Degenerator.Inflection do
     :existing?
   ]
 
+  defguard is_inflection(inflection) when is_struct(inflection, __MODULE__)
+
   def new(module, opts \\ [])
 
-  def new("Elixir." <> module, opts) do
-    split = ("Elixir." <> module) |> Module.split() |> List.delete("Elixir")
-    namespace = namespace(split, opts)
-    singular = singular(split, namespace)
+  def new(module, opts) when is_binary(module) do
+    {singular, base, namespace} = build_singular(module, opts)
 
-    module = Module.concat(split)
     plural = Keyword.get_lazy(opts, :plural, fn -> :"#{singular}s" end)
-    id = Keyword.get_lazy(opts, :id, fn -> :"#{singular}_id" end)
     camelized = camelize(singular)
     context = camelize(plural)
-    base = base(opts)
+
+    split =
+      (namespace |> to_common_string() |> String.split(".")) ++
+        (camelized |> to_common_string() |> String.split("."))
+
+    module = Module.concat(split)
+    id = Keyword.get_lazy(opts, :id, fn -> :"#{singular}_id" end)
     path = path(module)
     existing = Code.ensure_loaded?(module)
 
@@ -92,57 +144,18 @@ defmodule Degenerator.Inflection do
     }
   end
 
-  def new(module, opts) when is_binary(module) do
-    case Keyword.fetch(opts, :namespace) do
-      {:ok, namespace} ->
-        new(Atom.to_string(namespace) <> "." <> Atom.to_string(camelize(module)), opts)
-
-      :error ->
-        new(
-          "Elixir." <> Atom.to_string(base(opts)) <> "." <> Atom.to_string(camelize(module)),
-          opts
-        )
-    end
-  end
-
   def new(module, opts) when is_atom(module), do: new(Atom.to_string(module), opts)
 
   # :healthcare_service -> HealthcareService
-  def camelize(singular) do
-    singular
-    |> to_string()
-    |> String.split(".")
+  def camelize(value) when is_atom(value), do: value |> to_string() |> camelize()
+
+  def camelize(value) when is_binary(value), do: value |> String.split(".") |> camelize()
+
+  def camelize(value) when is_list(value) do
+    value
     |> Enum.map_join(".", &Macro.camelize/1)
     |> String.to_atom()
   end
-
-  defp namespace(module_split, opts) do
-    default =
-      module_split
-      |> case do
-        [_] -> module_split
-        [_ | _] -> List.delete_at(module_split, -1)
-      end
-      |> Module.concat()
-
-    Keyword.get(opts, :namespace, default)
-  end
-
-  defp singular(module_split, namespace) do
-    module_split
-    |> strip_namespace(Module.split(namespace))
-    |> Enum.map_join(".", &Macro.underscore/1)
-    |> String.to_atom()
-  end
-
-  defp strip_namespace(module_split, []), do: module_split
-
-  defp strip_namespace([h], [h]), do: [h]
-
-  defp strip_namespace([h | module_split], [h | namespace_split]),
-    do: strip_namespace(module_split, namespace_split)
-
-  defp strip_namespace(module_split, _), do: [List.last(module_split)]
 
   defp path(module) do
     case Code.ensure_loaded?(module) do
@@ -151,10 +164,47 @@ defmodule Degenerator.Inflection do
     end
   end
 
-  defp base(opts) do
-    case Keyword.fetch(opts, :base) do
-      {:ok, base} -> camelize(base)
-      :error -> Mix.Project.config() |> Keyword.fetch!(:app) |> camelize()
-    end
+  defp base(module, opts) do
+    module_split = module |> to_string() |> String.trim_leading("Elixir.") |> String.split(".")
+
+    default =
+      case module_split do
+        [_] -> Mix.Project.config() |> Keyword.fetch!(:app) |> camelize()
+        [base | _] -> camelize(base)
+      end
+
+    Keyword.get(opts, :base, default)
   end
+
+  defp namespace(module, base, opts) do
+    module_split = module |> to_string() |> String.split(".")
+
+    default =
+      case module_split do
+        [_] -> base
+        [_ | _] -> module_split |> List.delete_at(-1) |> camelize()
+      end
+
+    Keyword.get(opts, :namespace, default)
+  end
+
+  defp build_singular(name, opts) when is_atom(name),
+    do: name |> Atom.to_string() |> String.trim_leading("Elixir.") |> build_singular(opts)
+
+  defp build_singular(module, opts) when is_binary(module) do
+    base = base(module, opts)
+    namespace = namespace(module, base, opts)
+
+    singular =
+      module
+      |> String.trim_leading("Elixir.")
+      |> String.trim_leading(to_common_string(namespace) <> ".")
+      |> String.split(".")
+      |> Enum.map_join(".", &Macro.underscore/1)
+      |> String.to_atom()
+
+    {singular, base, namespace}
+  end
+
+  defp to_common_string(value), do: value |> to_string() |> String.trim_leading("Elixir.")
 end
