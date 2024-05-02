@@ -37,9 +37,9 @@ defmodule Degenerator.Code.Quoted do
 
   defp sort(enum, opts) do
     sorter = Keyword.get(opts, :sorter, &<=/2)
-    mapper = Keyword.get(opts, :mapper, &elem(&1, 2))
+    mapper = opts |> Keyword.get(:mapper, &Function.identity/1) |> evaluated_mapper()
 
-    if Keyword.get(opts, :sort, false) do
+    if Keyword.get(opts, :sort, true) do
       Enum.sort_by(enum, mapper, sorter)
     else
       enum
@@ -47,12 +47,20 @@ defmodule Degenerator.Code.Quoted do
   end
 
   defp uniq(enum, opts) do
-    mapper = Keyword.get(opts, :mapper, &elem(&1, 2))
+    mapper = opts |> Keyword.get(:mapper, &Function.identity/1) |> evaluated_mapper()
 
-    if Keyword.get(opts, :sort, false) do
+    if Keyword.get(opts, :sort, true) do
       Enum.uniq_by(enum, mapper)
     else
       enum
+    end
+  end
+
+  defp evaluated_mapper(func) when is_function(func) do
+    fn quoted ->
+      {evaluated, _binding} = quoted |> Code.eval_quoted() |> func.()
+
+      evaluated
     end
   end
 
