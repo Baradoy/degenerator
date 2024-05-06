@@ -178,7 +178,7 @@ defmodule Mix.Tasks.Degenerator do
     namespace =
       module.namespace
       |> to_string()
-      |> String.replace(to_string(module.base), "<%= base %>")
+      |> String.replace(to_string(module.base), "<%= base_underscore %>")
 
     %{
       source: source,

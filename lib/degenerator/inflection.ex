@@ -12,6 +12,7 @@ defmodule Degenerator.Inflection do
       camelized: :Patient,
       context: :Patients,
       base: :Degenerator,
+      base_underscore: :degenerator,
       namespace: Degenerator.Schema,
       module: Degenerator.Schema.Patient,
       split: ["Degenerator", "Schema", "Patient"],
@@ -27,6 +28,7 @@ defmodule Degenerator.Inflection do
       camelized: :AuditEvent,
       context: :AuditEvents,
       base: :Degenerator,
+      base_underscore: :degenerator,
       namespace: Degenerator.Schema,
       module: Degenerator.Schema.AuditEvent,
       split: ["Degenerator", "Schema", "AuditEvent"],
@@ -42,6 +44,7 @@ defmodule Degenerator.Inflection do
       camelized: :Factory,
       context: :Factories,
       base: :Degenerator,
+      base_underscore: :degenerator,
       namespace: :Degenerator,
       module: Degenerator.Factory,
       split: ["Degenerator", "Factory"],
@@ -57,6 +60,7 @@ defmodule Degenerator.Inflection do
       camelized: :Inflection,
       context: :Inflections,
       base: :Degenerator,
+      base_underscore: :degenerator,
       namespace: :Degenerator,
       module: Degenerator.Inflection,
       split: ["Degenerator", "Inflection"],
@@ -72,6 +76,7 @@ defmodule Degenerator.Inflection do
       camelized: :Inflection,
       context: :Inflections,
       base: :Degenerator,
+      base_underscore: :degenerator,
       namespace: :Degenerator,
       module: Degenerator.Inflection,
       split: ["Degenerator", "Inflection"],
@@ -87,6 +92,7 @@ defmodule Degenerator.Inflection do
       camelized: :Degenerator,
       context: :Degenerators,
       base: :Degenerator,
+      base_underscore: :degenerator,
       namespace: :Degenerator,
       module: Degenerator.Degenerator,
       split: ["Degenerator", "Degenerator"],
@@ -102,6 +108,7 @@ defmodule Degenerator.Inflection do
     :camelized,
     :context,
     :base,
+    :base_underscore,
     :namespace,
     :module,
     :split,
@@ -119,6 +126,7 @@ defmodule Degenerator.Inflection do
     plural = Keyword.get_lazy(opts, :plural, fn -> :"#{singular}s" end)
     camelized = camelize(singular)
     context = camelize(plural)
+    base_underscore = base |> to_common_string() |> Macro.underscore() |> String.to_atom()
 
     split =
       (namespace |> to_common_string() |> String.split(".")) ++
@@ -136,6 +144,7 @@ defmodule Degenerator.Inflection do
       camelized: camelized,
       context: context,
       base: base,
+      base_underscore: base_underscore,
       namespace: namespace,
       module: module,
       split: split,
