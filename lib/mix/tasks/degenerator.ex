@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Degenerator do
 
   def run(args) do
     case OptionParser.parse(args,
-           switches: [variable: :string, sgenerator: :string, module: :string, app: :string]
+           switches: [generator: :string, module: :string, app: :string]
          ) do
       {opts, [], []} -> create_generator(opts)
       _ -> usage()
