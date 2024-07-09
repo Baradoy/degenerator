@@ -40,7 +40,7 @@ Subsequent runs of `degenerator` will add to the new module template to the exis
 
 ## Limitations
 
-- The generators that are created rely on Phoenix.Mix as at least a dev dependancy.
+- The generators that are created rely on Phoenix.Mix as at least a dev dependency.
 - This might not work with umbrella projects in the slightest.
 
 ## Bugs
